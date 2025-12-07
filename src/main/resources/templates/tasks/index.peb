@@ -28,6 +28,9 @@
     </div>
     {% endif %}
 
+    {# Status messages for HTMX + screen readers #}
+    <div id="status" role="status" aria-live="polite"></div>
+
     {# Add Task Form - Week 7 #}
     <section aria-labelledby="add-heading">
         <h2 id="add-heading">Add New Task</h2>

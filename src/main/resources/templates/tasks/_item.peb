@@ -1,5 +1,27 @@
 <li id="task-{{ task.id }}" class="task-view">
-  <span class="task-title">{{ task.title }}</span>
+  <span class="task-title">
+    {% if task.pinned %}
+      <span class="pin-indicator" aria-hidden="true">📌</span>
+    {% endif %}
+    {{ task.title }}
+  </span>
+
+  <form action="/tasks/{{ task.id }}/pin" method="post" style="display: inline;"
+        hx-post="/tasks/{{ task.id }}/pin"
+        hx-target="#task-{{ task.id }}"
+        hx-swap="outerHTML">
+    {% if task.pinned %}
+      <button type="submit"
+              aria-label="Unpin task: {{ task.title }}">
+        Unpin
+      </button>
+    {% else %}
+      <button type="submit"
+              aria-label="Pin task: {{ task.title }}">
+        Pin
+      </button>
+    {% endif %}
+  </form>
 
   <form action="/tasks/{{ task.id }}/edit" method="get" style="display: inline;"
         hx-get="/tasks/{{ task.id }}/edit"

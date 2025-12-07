@@ -39,6 +39,7 @@ fun Routing.configureTaskRoutes(store: TaskStore = TaskStore()) {
     post("/tasks/{id}/edit") { call.handleUpdateTask(store) }
     get("/tasks/{id}/view") { call.handleViewTask(store) }
     post("/tasks/{id}/toggle") { call.handleToggleTask(store) }
+    post("/tasks/{id}/pin") { call.handleTogglePin(store) }
     delete("/tasks/{id}") { call.handleDeleteTask(store) }  // HTMX path (RESTful)
     post("/tasks/{id}/delete") { call.handleDeleteTask(store) }  // No-JS fallback
     get("/tasks/search") { call.handleSearchTasks(store) }
@@ -86,7 +87,21 @@ private suspend fun ApplicationCall.handleCreateTask(store: TaskStore) {
 
         when (val validation = Task.validate(title)) {
             is ValidationResult.Error -> handleCreateTaskError(store, title, query, validation)
-            ValidationResult.Success -> handleCreateTaskSuccess(store, title, query)
+            ValidationResult.Success -> {
+                val isDuplicate = store.getAll().any { it.title.equals(title, ignoreCase = true) }
+                if (isDuplicate) {
+                    val duplicateError = ValidationResult.Error("Task with this title already exists.")
+                    handleCreateTaskError(
+                        store = store,
+                        title = title,
+                        query = query,
+                        validation = duplicateError,
+                        outcomeOverride = "duplicate_title",
+                    )
+                } else {
+                    handleCreateTaskSuccess(store, title, query)
+                }
+            }
         }
     }
 }
@@ -96,9 +111,10 @@ private suspend fun ApplicationCall.handleCreateTaskError(
     title: String,
     query: String,
     validation: ValidationResult.Error,
+    outcomeOverride: String? = null,
 ) {
     val outcome =
-        when {
+        outcomeOverride ?: when {
             title.isBlank() -> "blank_title"
             title.length < Task.MIN_TITLE_LENGTH -> "min_length"
             title.length > Task.MAX_TITLE_LENGTH -> "max_length"
@@ -176,6 +192,47 @@ private suspend fun ApplicationCall.handleToggleTask(store: TaskStore) {
 }
 
 /**
+ * Handle task pin / unpin.
+ */
+private suspend fun ApplicationCall.handleTogglePin(store: TaskStore) {
+    timed("T5_pin", jsMode()) {
+        val id =
+            parameters["id"] ?: run {
+                respond(HttpStatusCode.BadRequest, "Missing task ID")
+                return@timed
+            }
+
+        val updated = store.togglePin(id)
+
+        if (updated == null) {
+            respond(HttpStatusCode.NotFound, "Task not found")
+            return@timed
+        }
+
+        if (isHtmxRequest()) {
+            // 重新渲染单个 task item
+            val taskHtml =
+                renderTemplate(
+                    "tasks/_item.peb",
+                    mapOf("task" to updated.toPebbleContext()),
+                )
+
+            val statusText = if (updated.pinned) "pinned" else "unpinned"
+            val statusHtml =
+                messageStatusFragment(
+                    """Task "${updated.title}" $statusText.""",
+                )
+
+            respondText(taskHtml + "\n" + statusHtml, ContentType.Text.Html)
+        } else {
+            response.headers.append("Location", "/tasks")
+            respond(HttpStatusCode.SeeOther)
+        }
+    }
+}
+
+
+/**
  * Handle task deletion.
  */
 private suspend fun ApplicationCall.handleDeleteTask(store: TaskStore) {
@@ -233,6 +290,10 @@ private fun paginateTasks(
 ): PaginatedTasks {
     val tasks =
         (if (query.isBlank()) store.getAll() else store.search(query))
+            .sortedWith(
+                compareByDescending<model.Task> { it.pinned }
+                    .thenByDescending { it.createdAt }
+            )
             .map { it.toPebbleContext() }
     val pageData = Page.paginate(tasks, currentPage = page, pageSize = PAGE_SIZE)
 

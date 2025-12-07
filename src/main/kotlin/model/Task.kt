@@ -20,6 +20,7 @@ data class Task(
     val id: String = UUID.randomUUID().toString(),
     val title: String,
     val completed: Boolean = false,
+    val pinned: Boolean = false,
     val createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
     companion object {
@@ -102,6 +103,7 @@ data class Task(
             "id" to id,
             "title" to title,
             "completed" to completed,
+            "pinned" to pinned,
             "createdAt" to createdAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")),
             "createdAtISO" to createdAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
         )

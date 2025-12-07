@@ -33,7 +33,7 @@ class TaskStore(
         private val CSV_FORMAT =
             CSVFormat.DEFAULT
                 .builder()
-                .setHeader("id", "title", "completed", "created_at")
+                .setHeader("id", "title", "completed", "pinned", "created_at")
                 .setSkipHeaderRecord(true)
                 .build()
 
@@ -51,7 +51,7 @@ class TaskStore(
         if (csvFile.length() == EMPTY_FILE_SIZE) {
             FileWriter(csvFile).use { writer ->
                 CSVPrinter(writer, CSV_FORMAT).use { printer ->
-                    printer.printRecord("id", "title", "completed", "created_at")
+                    printer.printRecord("id", "title", "completed", "pinned", "created_at")
                 }
             }
         }
@@ -73,7 +73,8 @@ class TaskStore(
                             id = record[0],
                             title = record[1],
                             completed = record[2].toBoolean(),
-                            createdAt = LocalDateTime.parse(record[3], DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                            pinned = record[3].toBoolean(),
+                            createdAt = LocalDateTime.parse(record[4], DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                         )
                     } catch (e: IndexOutOfBoundsException) {
                         // CSV row has missing fields - skip this row
@@ -123,6 +124,7 @@ class TaskStore(
                     task.id,
                     task.title,
                     task.completed,
+                    task.pinned,
                     task.createdAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                 )
             }
@@ -181,6 +183,19 @@ class TaskStore(
     }
 
     /**
+     * Toggle pin status
+     *
+     * @param id Task ID
+     * @return Updated task if found, null if not found
+     */
+    fun togglePin(id: String): Task? {
+        val task = getById(id) ?: return null
+        val updated = task.copy(pinned = !task.pinned)
+        update(updated)
+        return updated
+    }
+
+    /**
      * Search tasks by title (case-insensitive substring match).
      *
      * **Example**: query="invoice" matches "Pay invoice" and "Invoice review"
@@ -206,12 +221,13 @@ class TaskStore(
     private fun writeAll(tasks: List<Task>) {
         FileWriter(csvFile, false).use { writer ->
             CSVPrinter(writer, CSV_FORMAT).use { printer ->
-                printer.printRecord("id", "title", "completed", "created_at")
+                printer.printRecord("id", "title", "completed", "pinned", "created_at")
                 tasks.forEach { task ->
                     printer.printRecord(
                         task.id,
                         task.title,
                         task.completed,
+                        task.pinned,
                         task.createdAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                     )
                 }
@@ -228,7 +244,7 @@ class TaskStore(
         csvFile.createNewFile()
         FileWriter(csvFile).use { writer ->
             CSVPrinter(writer, CSV_FORMAT).use { printer ->
-                printer.printRecord("id", "title", "completed", "created_at")
+                printer.printRecord("id", "title", "completed", "pinned", "created_at")
             }
         }
     }
